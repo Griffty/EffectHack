@@ -20,6 +20,8 @@ public:
     InputLevels levels() const noexcept;
     unsigned generation() const noexcept { return streamGeneration.load(); }
     bool active() const noexcept { return streamActive.load(); }
+    /// Tuner-thread consumer only. Generation tags let the worker reject samples
+    /// from previous sources without resetting the FIFO concurrently.
     int read(TunerSample* destination, int capacity) noexcept;
 private:
     static constexpr int capacity = 4096;

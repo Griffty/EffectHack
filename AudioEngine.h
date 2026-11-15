@@ -18,6 +18,15 @@
 
 namespace effecthack
 {
+/** Owns the live signal path, effect histories, and transport transitions.
+ *
+ * Scalar controls are atomic; that does not make compound rack/source mutations
+ * thread-safe. UI callers serialize those operations with the device manager's
+ * callback lock. Prepare/IR loading runs outside the callback. The callback uses
+ * preallocated buffers and publishes meter values for the UI to read.
+ *
+ * See documentation/ARCHITECTURE.md for routing and the silent-commit protocol.
+ */
 class AudioEngine final : public juce::AudioIODeviceCallback
 {
 public:
@@ -74,6 +83,8 @@ public:
         rack.add(reverb);
         std::copy(rack.stages().begin(), rack.stages().end(), activeStages.begin());
     }
+    /// Install the same immutable IR into independent L/R convolvers.
+    /// Call off the audio thread, with callbacks excluded.
     void setCabinetImpulse(std::shared_ptr<const CabinetImpulse> impulse)
     {
         cabinet.channel(0).setImpulse(impulse);
@@ -89,6 +100,8 @@ public:
     float gateReductionDb() const noexcept { return gate.gainReductionDb(); }
     float compressionReductionDb() const noexcept { return compressor.gainReductionDb(); }
     const RackStageChain& stageChain() const noexcept { return rack; }
+    /// Allocate/reset DSP for a device configuration while callbacks are stopped.
+    /// Offline renderers use this before invoking the callback without a device.
     void prepare(double sampleRate, int maximumBlockSize);
     // Serialize transport commands with the manager's callback lock.
     void seekPlayback(double seconds);

@@ -7,6 +7,8 @@ namespace effecthack
 {
 struct CabinetParameters { std::atomic<bool> bypass { false }; };
 
+/// Prepared response shared read-only by the two channel processors. sourcePath
+/// is empty for the built-in response; custom preset files retain only its path.
 struct CabinetImpulse
 {
     juce::AudioBuffer<float> samples;
@@ -22,6 +24,7 @@ struct CabinetLoadResult
 };
 
 std::shared_ptr<CabinetImpulse> makeBuiltinCabinet();
+/// Decode and validate an IR off-thread before attempting to replace live DSP.
 CabinetLoadResult loadCabinetImpulse(const juce::File&);
 
 class Cabinet final

@@ -8,6 +8,8 @@ float detectPitch(const float* samples, int count, double rate);
 struct TuningReading { juce::String note; float cents = 0; };
 TuningReading describePitch(float frequency, double referenceA4);
 
+/// Background consumer of InputMonitor. Published frequency is valid only for
+/// the current input generation; estimation latency does not delay guitar audio.
 class Tuner final : private juce::Thread
 {
 public:

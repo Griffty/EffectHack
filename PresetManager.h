@@ -19,12 +19,16 @@ struct Preset
     juce::String id, name;
     RackState rack;
 };
+/// Worker-prepared state: decoded IR plus validated controls. An error prevents
+/// commit; keep the currently audible rack when preparation fails.
 struct PreparedPreset
 {
     RackState rack;
     std::shared_ptr<const CabinetImpulse> impulse;
     juce::String error;
 };
+/// Snapshot controls and order with callbacks excluded when a coherent multi-field
+/// view is required. Individual atomic reads alone do not form a transaction.
 RackState captureRack(const AudioEngine&);
 juce::Result validateRack(const RackState&);
 PreparedPreset preparePreset(const RackState&); // File decoding off the audio thread.
@@ -33,6 +37,8 @@ juce::Result applyPreset(AudioEngine&, const PreparedPreset&);
 juce::var encodePreset(const Preset&);
 juce::Result decodePreset(const juce::var&, Preset&);
 
+/// Disk-backed user preset CRUD. Run file work off the audio thread. Factory
+/// presets are a separate read-only catalog; this store uses stable preset IDs.
 class PresetManager
 {
 public:

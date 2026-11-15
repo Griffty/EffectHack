@@ -12,6 +12,8 @@ struct ReverbParameters
     std::atomic<bool> bypass { true };
 };
 
+/// JUCE stereo room fed into a separate wet buffer, then blended by smoothed mix.
+/// Size/damping/mix are normalized controls; bypass fades wet contribution to zero.
 class Reverb final : public StereoRackStage
 {
 public:

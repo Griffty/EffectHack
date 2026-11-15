@@ -126,6 +126,10 @@ private:
     std::function<void(int)> onSourceChanged;
 };
 
+/** Message-thread coordinator for devices, controls, and worker completions.
+ * Owns the live engine; companion MainComponent*.cpp files separate tone commits,
+ * A/B state, phrase capture, keyboard handling, and startup persistence.
+ */
 class MainComponent final : public juce::Component, private juce::Timer, private juce::KeyListener
 {
 public:

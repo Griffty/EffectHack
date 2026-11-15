@@ -5,6 +5,8 @@
 
 namespace effecthack
 {
+/// Gains are dB; mix is 0..1. inputDb/outputDb remain here for compatibility,
+/// but AudioEngine applies those Master gains once outside the movable rack.
 struct DistortionParameters
 {
     std::atomic<float> inputDb { 0.0f };

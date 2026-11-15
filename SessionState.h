@@ -19,6 +19,9 @@ struct SessionState
 };
 juce::var encodeSession(const SessionState&);
 juce::Result decodeSession(const juce::var&, SessionState&);
+/// Validated startup JSON written via a temporary file and atomic replacement.
+/// An empty path disables persistence for isolated tests. Save on normal shutdown;
+/// in-memory phrases and transient transport/mute/bypass states are not restored.
 class SessionStore
 {
 public:

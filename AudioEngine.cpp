@@ -143,6 +143,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
             inputOver = inputOver || std::abs(clean) >= 1.0f;
             samples[i] = clean;
         }
+        // Capture before trim/effects so the identical performance can be auditioned
+        // through another rack. Never record the phrase back into itself.
         phraseRecorder.process(samples, count, enabled && sourceAvailable && !draining
             && !phraseAudition.load() && pendingPhraseAudition.load() < 0);
         for (int i = 0; i < count; ++i)
@@ -154,6 +156,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
             masterDryDelay.pushSample(0, samples[i]);
             dry.setSample(0, i, masterDryDelay.popSample(0));
         }
+        // Mono source enters a stereo rack. Only final one-channel device output
+        // folds it down; later stages must preserve any width created upstream.
         stereo.copyFrom(0, 0, mono, 0, 0, count);
         stereo.copyFrom(1, 0, mono, 0, 0, count);
         for (auto* stage : activeStages) stage->process(stereo, count);
@@ -205,6 +209,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
             tailPlaying.store(true);
         }
     }
+    // EOF feeds silence through spatial history until quiet or a bounded timeout.
+    // This is distinct from Pause, which fades monitoring down and clears history.
     if (draining)
     {
         tailSamplesRemaining -= numberOfSamples;

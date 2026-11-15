@@ -12,6 +12,8 @@ struct ChorusParameters
     std::atomic<bool> bypass { true };
 };
 
+/// Stereo modulated delay with a quarter-cycle L/R phase offset. Parameters use
+/// Hz and normalized depth/mix. Bypass ramps mix to zero while history continues.
 class Chorus final : public StereoRackStage
 {
 public:

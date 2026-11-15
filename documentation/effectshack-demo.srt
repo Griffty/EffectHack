@@ -1,0 +1,19 @@
+1
+00:00:00,000 --> 00:00:06,000
+Your guitar. One recorded phrase.
+
+2
+00:00:06,000 --> 00:00:09,000
+Paste a YouTube link.
+
+3
+00:00:09,000 --> 00:00:13,000
+Gemini listens, builds a tone, then refines it.  |  Sped up
+
+4
+00:00:13,000 --> 00:00:21,000
+Same performance. Song-inspired tone.
+
+5
+00:00:21,000 --> 00:00:26,000
+Adjust the effects. Make it yours.

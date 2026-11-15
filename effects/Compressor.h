@@ -5,6 +5,8 @@
 
 namespace effecthack
 {
+/// Threshold/makeup are dB, attack/release are milliseconds, mix is 0..1.
+/// Compression uses a fixed 6 dB soft knee and manual (not automatic) makeup.
 struct CompressorParameters
 {
     std::atomic<float> thresholdDb { -18 }, ratio { 4 }, attackMs { 10 }, releaseMs { 120 }, makeupDb { 0 }, mix { 1 };

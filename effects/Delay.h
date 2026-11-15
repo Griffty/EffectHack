@@ -12,6 +12,8 @@ struct DelayParameters
     std::atomic<bool> bypass { true };
 };
 
+/// Independent L/R feedback delays (no crossfeed). Time is milliseconds; feedback
+/// and mix are normalized. Allocation is confined to prepare(); reset clears echoes.
 class Delay final : public StereoRackStage
 {
 public:

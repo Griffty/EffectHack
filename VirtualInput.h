@@ -20,6 +20,8 @@ struct ClipLoadResult
 };
 
 // File decoding and riff generation run outside the audio callback.
+/// Decode bounded files off-thread; mono downmix and decoded-memory limits are
+/// enforced here. Failure is reported in error rather than replacing a live source.
 ClipLoadResult loadAudioClip(const juce::File&);
 std::shared_ptr<AudioClip> makeTestRiff();
 

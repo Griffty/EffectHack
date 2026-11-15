@@ -12,6 +12,9 @@ struct ToneSlotState
     int active = 0;
     std::array<std::optional<ToneSnapshot>, 2> slots;
 };
+/// Message-thread edit buffers, not two simultaneous audio processors. recall()
+/// stages a destination; commit() updates active identity only after DSP commit.
+/// MainComponent preserves shared Master gains and owns prepared cabinet caches.
 class ToneSlots
 {
 public:

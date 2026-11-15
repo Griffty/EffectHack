@@ -5,6 +5,8 @@
 
 namespace effecthack
 {
+/// Threshold is dBFS; attack/hold/release are milliseconds. One detector controls
+/// both channels, preventing independent gates from shifting the stereo image.
 struct NoiseGateParameters
 {
     std::atomic<float> thresholdDb { -50 }, attackMs { 1 }, holdMs { 30 }, releaseMs { 120 };

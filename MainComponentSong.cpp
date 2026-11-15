@@ -53,6 +53,8 @@ void MainComponent::startToneChange(Preset target, RackState rack, juce::var gen
     loadingPreset = true; refreshPresetControls(); refreshCabinetStatus();
     auto safe = juce::Component::SafePointer<MainComponent>(this);
     const auto cached = slotIndex >= 0 && slotIndex < 2 ? slotPrepared[static_cast<size_t>(slotIndex)] : std::optional<PreparedPreset>();
+    // Preparation owns disk/preview work on the worker. Only a complete result is
+    // posted back; SafePointer guards window destruction while the job is running.
     loader.addJob([safe, target, rack, generation, origin, cancel, previous, preserveMaster, slotIndex, cached, done = std::move(done)]() mutable
     {
         PreparedPreset prepared;
@@ -88,6 +90,8 @@ void MainComponent::startToneChange(Preset target, RackState rack, juce::var gen
         });
     });
 }
+// Message-thread half of the transaction: poll the fade, commit while silent and
+// callback-locked, then publish preset/slot identity. Never mark a slot active early.
 void MainComponent::serviceToneChange()
 {
     if (!pendingToneChange.has_value()) return;

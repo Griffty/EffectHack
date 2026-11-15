@@ -11,6 +11,8 @@ struct EqualizerParameters
     std::atomic<bool> bypass { false };
 };
 
+/// Mono three-band biquad EQ with smoothed gain controls. Rack use wraps two
+/// instances in ChannelWiseRackStage so moving EQ after chorus preserves width.
 class Equalizer final
 {
 public:

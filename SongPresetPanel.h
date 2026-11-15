@@ -4,6 +4,8 @@
 
 namespace effecthack
 {
+/// Song-reference UI and cancellable worker request lifetime. It delegates final
+/// rack application to its owner rather than mutating AudioEngine directly.
 class SongPresetPanel final : public juce::Component
 {
 public:

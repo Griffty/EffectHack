@@ -216,6 +216,8 @@ SongRecommendation matchSongTone(const ToneMatchInput& input, const ApiConfig& c
     if (auto balanced = balanceMatchedTone(result.tone, cancel); balanced.failed())
     { result.error = balanced.getErrorMessage(); result.tone = juce::var(); return result; }
     if (cancelled()) { result.tone = juce::var(); return result; }
+    // Review the sound rendered by this processor, not just its numeric settings.
+    // A failed optional review retains the valid first pass; cancellation discards it.
     if (referenceAudio && includeAudioExamples)
     {
         update("Auditioning generated tone", .85);

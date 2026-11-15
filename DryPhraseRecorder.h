@@ -18,6 +18,8 @@ class DryPhraseRecorder
 public:
     enum class State { idle, armed, recording, ready };
     static constexpr double maximumSeconds = 30, minimumSeconds = .25;
+    /// Worker/UI allocation and finalization: finish() rejects silence/short takes,
+    /// trims to captured length, adds 5 ms boundary fades, and calculates UI peaks.
     static std::shared_ptr<AudioClip> allocate(double sampleRate);
     static DryPhrase finish(std::shared_ptr<AudioClip>, int samples);
     // Serialize mutation with the audio callback lock.
@@ -25,6 +27,8 @@ public:
     void stop() noexcept;
     void cancel();
     std::shared_ptr<AudioClip> take();
+    /// Audio-thread producer. Copies pre-trim mono samples into fixed storage;
+    /// reaching capacity publishes ready. take() transfers ownership once stopped.
     void process(const float* dry, int samples, bool canCapture) noexcept;
     State state() const { return status.load(std::memory_order_acquire); }
     bool capturing() const { const auto s = state(); return s == State::armed || s == State::recording; }

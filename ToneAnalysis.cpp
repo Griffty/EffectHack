@@ -216,6 +216,8 @@ juce::var compileTonePlan(const juce::var& plan, const std::vector<ToneAnchor>& 
 {
     const auto found = std::find_if(anchors.begin(), anchors.end(), [&plan](const auto& a) { return a.id == plan["base_preset"].toString(); });
     if (found == anchors.end()) return {};
+    // juce::var copies share DynamicObjects. Deep-copy before editing to prevent
+    // one generated candidate from contaminating the reusable anchor catalog.
     const auto base = juce::JSON::parse(juce::JSON::toString(found->rack));
     auto* tone = new juce::DynamicObject;
     for (const auto* key : { "parameters", "bypass", "ampVoice", "order" }) tone->setProperty(key, base[key]);

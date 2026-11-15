@@ -4,6 +4,8 @@
 
 namespace effecthack
 {
+/// In-memory 16-bit / 16 kHz mono WAV encoded for a Gemini media request.
+/// An error means no usable payload; this is separate from live file playback.
 struct ReferenceAudio
 {
     juce::String base64, error;

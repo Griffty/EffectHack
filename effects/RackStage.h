@@ -6,6 +6,12 @@
 
 namespace effecthack
 {
+/** Processing contract for one rack entry.
+ * prepare() may allocate and must precede process(). process() works in-place on
+ * two channels, with count <= the prepared capacity; it must not block or allocate.
+ * reset() clears history without changing controls. Report processing latency even
+ * when bypassed so dry/wet and whole-rack bypass remain aligned.
+ */
 class RackStage
 {
 public:
@@ -19,6 +25,9 @@ public:
     virtual int latencySamples() const noexcept { return 0; }
 };
 
+/// Non-owning, ordered stage registry. Stage lifetimes must outlast the chain.
+/// Mutating the desired order is serialized by AudioEngine; its callback uses a
+/// separate active-stage snapshot until the transition fade reaches silence.
 class RackStageChain
 {
 public:

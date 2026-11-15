@@ -5,6 +5,8 @@
 
 namespace effecthack
 {
+/// Gain/tone/Level controls are in dB. Voice indexes AmpVoice; Level balances
+/// post-saturation loudness independently from preamp gain and Master Output.
 struct AmpParameters
 {
     std::atomic<int> voice { static_cast<int>(AmpVoice::crunch) };

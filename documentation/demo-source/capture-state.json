@@ -1,0 +1,52 @@
+{
+  "video_start": 64023.861399818,
+  "audio_start": 64024.662407045,
+  "audio_offset": 0.8010072269971715,
+  "events": [
+    {
+      "name": "dry_start",
+      "elapsed": 1.3352184850009507
+    },
+    {
+      "name": "dry_end",
+      "elapsed": 13.414022247001412
+    },
+    {
+      "name": "song_open",
+      "elapsed": 13.4808887399995
+    },
+    {
+      "name": "link_start",
+      "elapsed": 24.028930551001395
+    },
+    {
+      "name": "link_ready",
+      "elapsed": 24.975327972999366
+    },
+    {
+      "name": "generation_start",
+      "elapsed": 25.377544338996813
+    },
+    {
+      "name": "generation_done",
+      "elapsed": 79.15353623800183
+    },
+    {
+      "name": "wet_start",
+      "elapsed": 80.21370788200147
+    },
+    {
+      "name": "tweak_start",
+      "elapsed": 92.22996969200176
+    },
+    {
+      "name": "tweak_start",
+      "elapsed": 103.05178674600029
+    },
+    {
+      "name": "end",
+      "elapsed": 108.14955540799565
+    }
+  ],
+  "stopped": 108.16579292000097
+}
