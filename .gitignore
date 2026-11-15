@@ -1,0 +1,8 @@
+/build*/
+/cmake-build-*/
+/.idea/
+/.cache/
+/.DS_Store
+/.env
+/.env.*
+!/.env.example
