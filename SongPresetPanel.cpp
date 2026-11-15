@@ -25,7 +25,7 @@ SongPresetPanel::SongPresetPanel(std::vector<SelectionPreset> choices, ApplySele
     custom.setToggleState(true, juce::dontSendNotification);
     custom.setTooltip("Create a custom tone around a rendered processor example. Off: select one unchanged factory preset.");
     preserveMaster.setToggleState(true, juce::dontSendNotification);
-    preserveMaster.setTooltip("Keep your current Input trim and Output listening level. Tone loudness is balanced internally once, before application. Off: use Input 0 dB and Output -9 dB.");
+    preserveMaster.setTooltip("Keep your current Input trim and Output listening level. Tone loudness is balanced internally once, before application. Off: use Input 0 dB and Output 0 dB.");
     custom.onClick = [this] { find.setButtonText(custom.getToggleState() ? "Match tone" : "Find preset"); preserveMaster.setEnabled(!busy && custom.getToggleState()); };
     custom.onClick();
     cancel.onClick = [this]

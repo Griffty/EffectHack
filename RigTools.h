@@ -13,6 +13,7 @@ public:
     RigTools(AudioEngine&, juce::AudioDeviceManager&);
     void refresh();
     void enableTuner();
+    void setTunerEnabled(bool);
     void paint(juce::Graphics&) override;
     void resized() override;
     juce::String performanceSummary() const;

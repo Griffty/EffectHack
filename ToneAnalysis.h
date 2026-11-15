@@ -16,7 +16,7 @@ struct ToneMatchInput
     juce::File file;
     double startSeconds = -1, endSeconds = -1;
     bool custom = true, preserveMaster = true;
-    float inputDb = 0, outputDb = -12;
+    float inputDb = 0, outputDb = 0;
 };
 struct ToneAnchor
 {

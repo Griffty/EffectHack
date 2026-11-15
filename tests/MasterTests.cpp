@@ -19,6 +19,7 @@ struct Harness
     explicit Harness(double rate)
     {
         input.clear(); output.clear(); engine.inputSource = AudioEngine::InputSource::hardware;
+        engine.parameters.outputDb = -12; // Exercise actual attenuation, independently of the 0 dB default.
         engine.rackBypass = true; engine.prepare(rate, 128); engine.monitoring = true;
     }
     void render(int blocks = 1)

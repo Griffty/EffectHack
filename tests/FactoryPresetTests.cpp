@@ -19,6 +19,7 @@ void testFactoryPresets(const juce::File& scratch)
         require(ids.insert(preset.id).second && isFactoryPreset(preset.id), "Factory IDs must be unique and recognized");
         require(entry.description.isNotEmpty() && validateRack(preset.rack).wasOk(), "Factory configurations must be valid and described");
         require(preset.rack.cabinetPath.isEmpty(), "Factories must work without external IR files");
+        require(preset.rack.values[3] == 0, "Factory Master Output defaults to 0 dB");
         require(preset.rack.bypass[2] && !preset.rack.bypass[3] && !preset.rack.bypass[4], "Use amp/cabinet without stacked distortion");
         Preset read;
         require(manager.read(preset.id, read).wasOk() && read.rack.matches(preset.rack), "Factory read must return its full configuration");

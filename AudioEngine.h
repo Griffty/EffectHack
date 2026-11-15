@@ -6,6 +6,7 @@
 #include "effects/NoiseGate.h"
 #include "effects/Compressor.h"
 #include "VirtualInput.h"
+#include "DryPhraseRecorder.h"
 #include "InputMonitor.h"
 #include "effects/Cabinet.h"
 #include "effects/Equalizer.h"
@@ -32,6 +33,13 @@ public:
     ReverbParameters reverbParameters;
     std::atomic<InputSource> inputSource { InputSource::testRiff };
     VirtualInput fileInput, testInput;
+    VirtualInput phraseInput;
+    DryPhraseRecorder phraseRecorder;
+    // Serialize changes with the callback lock. Audition switching fades the old
+    // source out before changing to the phrase, or back to the original input.
+    void requestPhraseAudition(bool);
+    bool isPhraseAuditioning() const { return phraseAudition.load(); }
+    bool phraseSwitchPending() const { return pendingPhraseAudition.load() >= 0; }
     // Session controls: intentionally excluded from tone presets.
     std::atomic<bool> masterMute { false }, rackBypass { false };
     std::atomic<bool> tunerEnabled { false }, tunerMute { true };
@@ -72,6 +80,8 @@ public:
         cabinet.channel(1).setImpulse(std::move(impulse));
     }
     juce::String cabinetSourcePath() const { return cabinet.channel(0).sourcePath(); }
+    // Caller holds the callback lock; retain the exact currently loaded response.
+    std::shared_ptr<const CabinetImpulse> cabinetImpulse() const { return cabinet.channel(0).currentImpulse(); }
     // Caller holds the audio callback lock. Desired order changes immediately;
     // audible processing switches only after its fade reaches silence.
     bool moveStage(const juce::String& stageId, int destinationIndex);
@@ -94,6 +104,9 @@ public:
                                           const juce::AudioIODeviceCallbackContext&) override;
 
 private:
+    std::atomic<bool> phraseAudition { false };
+    std::atomic<int> pendingPhraseAudition { -1 };
+    void finishPhraseSwitch();
     NoiseGate gate;
     Compressor compressor;
     ChannelWiseRackStage<Distortion> distortion;

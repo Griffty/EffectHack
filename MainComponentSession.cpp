@@ -5,6 +5,7 @@ namespace effecthack
 void MainComponent::restoreSessionTone(const SessionState& session)
 {
     restoringSession = loadingPreset = true;
+    if (session.toneSlots.has_value()) toneSlots.restore(*session.toneSlots);
     refreshPresetControls();
     auto safe = juce::Component::SafePointer<MainComponent>(this);
     loader.addJob([safe, session, manager = presetManager]
@@ -31,6 +32,8 @@ void MainComponent::restoreSessionTone(const SessionState& session)
             if (result.wasOk())
             {
                 safe->activePreset = selected;
+                safe->toneSlots.remember({ selected, prepared.rack });
+                safe->slotPrepared[static_cast<size_t>(safe->toneSlots.active())] = prepared;
                 safe->syncRackControls(prepared.rack);
                 safe->cabinetName = prepared.impulse->name;
                 safe->presetMessage = missingPreset ? "Last tone restored; its saved preset is missing. Use Save as."
@@ -60,9 +63,11 @@ void MainComponent::saveSession()
         state.inputChannel = engine.inputChannel.load();
     }
     state.presetId = activePreset.id;
+    toneSlots.remember({ activePreset, state.rack });
+    state.toneSlots = toneSlots.state();
     if (isGeneratedPreset()) state.generatedPreset = activePreset;
     state.sourceId = sourceSelector.getSelectedId();
-    state.loop = loopButton.getToggleState();
+    state.loop = engine.testInput.isLooping(); // Audition always loops; retain the original source preference.
     state.audioFile = rememberedAudioFile;
     state.tunerReference = rigTools.reference();
     state.tunerMute = engine.tunerMute.load();

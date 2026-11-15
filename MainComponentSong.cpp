@@ -39,20 +39,21 @@ void MainComponent::applySongRecommendation(const SongRecommendation& recommenda
         Preset preset;
         const auto valid = decodeGeneratedTone(recommendation.tone, preset);
         if (valid.failed()) { done(valid); return; }
-        startToneChange(preset, preset.rack, recommendation.tone, false, cancel, std::move(done), recommendation.preserveMaster);
+        startToneChange(preset, preset.rack, recommendation.tone, ToneChangeOrigin::song, cancel, std::move(done), recommendation.preserveMaster);
     }
     else if (const auto* factory = findFactoryPreset(recommendation.presetId))
-        startToneChange(factory->preset, factory->preset.rack, {}, false, cancel, std::move(done));
+        startToneChange(factory->preset, factory->preset.rack, {}, ToneChangeOrigin::song, cancel, std::move(done));
     else done(juce::Result::fail("Unsupported song tone."));
 }
-void MainComponent::startToneChange(Preset target, RackState rack, juce::var generation, bool reverting, Cancellation cancel, std::function<void(juce::Result)> done, bool preserveMaster)
+void MainComponent::startToneChange(Preset target, RackState rack, juce::var generation, ToneChangeOrigin origin, Cancellation cancel, std::function<void(juce::Result)> done, bool preserveMaster, int slotIndex)
 {
     if (loadingPreset || loadingCabinet) { done(juce::Result::fail("Rack is busy. Try again after loading finishes.")); return; }
     if (cancel->load()) { done(juce::Result::fail("Cancelled.")); return; }
     ToneUndo previous { activePreset, captureRack(engine) };
     loadingPreset = true; refreshPresetControls(); refreshCabinetStatus();
     auto safe = juce::Component::SafePointer<MainComponent>(this);
-    loader.addJob([safe, target, rack, generation, reverting, cancel, previous, preserveMaster, done = std::move(done)]() mutable
+    const auto cached = slotIndex >= 0 && slotIndex < 2 ? slotPrepared[static_cast<size_t>(slotIndex)] : std::optional<PreparedPreset>();
+    loader.addJob([safe, target, rack, generation, origin, cancel, previous, preserveMaster, slotIndex, cached, done = std::move(done)]() mutable
     {
         PreparedPreset prepared;
         float adjustment = 0;
@@ -63,10 +64,12 @@ void MainComponent::startToneChange(Preset target, RackState rack, juce::var gen
                 auto generated = prepareGeneratedTone(generation, cancel.get(), preserveMaster);
                 target = std::move(generated.preset); prepared = std::move(generated.prepared); adjustment = generated.outputAdjustmentDb;
             }
+            else if (cached.has_value() && cached->impulse != nullptr && cached->impulse->sourcePath == rack.cabinetPath)
+            { prepared = *cached; prepared.rack = rack; }
             else prepared = preparePreset(rack);
         }
-        catch (const std::exception&) { prepared.error = "Could not prepare this song tone."; }
-        juce::MessageManager::callAsync([safe, target, prepared = std::move(prepared), reverting, cancel, previous, adjustment, preserveMaster, done = std::move(done)]() mutable
+        catch (const std::exception&) { prepared.error = "Could not prepare this tone."; }
+        juce::MessageManager::callAsync([safe, target, prepared = std::move(prepared), origin, cancel, previous, adjustment, preserveMaster, slotIndex, done = std::move(done)]() mutable
         {
             if (safe == nullptr) return;
             if (cancel->load() || prepared.error.isNotEmpty())
@@ -77,7 +80,7 @@ void MainComponent::startToneChange(Preset target, RackState rack, juce::var gen
                 safe->refreshPresetControls(); safe->refreshCabinetStatus();
                 done(juce::Result::fail(error)); return;
             }
-            safe->pendingToneChange = PendingToneChange { target, std::move(prepared), previous, reverting, adjustment, cancel, std::move(done), preserveMaster };
+            safe->pendingToneChange = PendingToneChange { target, std::move(prepared), previous, origin, adjustment, cancel, std::move(done), preserveMaster, slotIndex };
             {
                 const juce::ScopedLock lock(safe->deviceManager.getAudioCallbackLock()); safe->engine.beginRackUpdate();
             }
@@ -99,19 +102,27 @@ void MainComponent::serviceToneChange()
             // Master changes made while the network request was running belong to the player.
             pending.prepared.rack.values[0] = engine.parameters.inputDb.load();
             pending.prepared.rack.values[3] = engine.parameters.outputDb.load();
-            pending.identity.rack = pending.prepared.rack;
+            if (pending.origin != ToneChangeOrigin::slot) pending.identity.rack = pending.prepared.rack;
         }
         result = cancelled ? juce::Result::fail("Cancelled.") : applyPreset(engine, pending.prepared);
         engine.endRackUpdate();
     }
     if (result.wasOk())
     {
-        if (pending.reverting) previousSongTone.reset(); else previousSongTone = pending.previous;
+        if (pending.origin == ToneChangeOrigin::slot)
+        {
+            toneSlots.commit(pending.slotIndex, { pending.identity, pending.prepared.rack });
+            slotPrepared[static_cast<size_t>(pending.slotIndex)] = pending.prepared;
+        }
+        else if (pending.origin == ToneChangeOrigin::revert) previousSongTone.reset();
+        else previousSongTone = pending.previous;
         activePreset = pending.identity;
         syncRackControls(pending.prepared.rack);
         cabinetName = pending.prepared.impulse->name; cabinetError.clear();
         presetHasError = false;
-        presetMessage = pending.reverting ? "Previous tone restored." : "Song tone loaded: " + activePreset.name;
+        presetMessage = pending.origin == ToneChangeOrigin::revert ? "Previous tone restored."
+            : pending.origin == ToneChangeOrigin::slot ? juce::String(pending.slotIndex == 0 ? "A: " : "B: ") + activePreset.name
+            : "Song tone loaded: " + activePreset.name;
         if (pending.outputAdjustment < 0) presetMessage += " / Reference-headroom Output adjustment " + juce::String(pending.outputAdjustment, 1) + " dB";
         refreshSignalFlow(); resized();
     }
@@ -125,7 +136,7 @@ void MainComponent::revertSongTone()
 {
     if (!previousSongTone.has_value() || loadingPreset || loadingCabinet) return;
     const auto undo = *previousSongTone;
-    startToneChange(undo.identity, undo.rack, {}, true, std::make_shared<std::atomic<bool>>(false), [](juce::Result) {});
+    startToneChange(undo.identity, undo.rack, {}, ToneChangeOrigin::revert, std::make_shared<std::atomic<bool>>(false), [](juce::Result) {});
 }
 juce::Result MainComponent::selectSongPreset(const juce::String& id)
 {

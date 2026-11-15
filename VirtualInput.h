@@ -36,6 +36,7 @@ public:
     void resume();
     void seek(double seconds);
     void setLooping(bool);
+    bool isLooping() const { return looping; }
     bool isFinished() const { return transport.hasStreamFinished(); }
     bool hasClip() const { return clip != nullptr; }
     double position() const;

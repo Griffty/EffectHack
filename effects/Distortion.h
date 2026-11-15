@@ -10,7 +10,7 @@ struct DistortionParameters
     std::atomic<float> inputDb { 0.0f };
     std::atomic<float> driveDb { 18.0f };
     std::atomic<float> mix { 1.0f };
-    std::atomic<float> outputDb { -12.0f };
+    std::atomic<float> outputDb { 0.0f };
     std::atomic<bool> bypass { false };
 };
 

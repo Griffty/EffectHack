@@ -11,7 +11,7 @@ const juce::Colour foreground { 0xffedf2f6 }, muted { 0xff9aa9b7 };
 const auto& stageIds = rackStageIds;
 }
 
-MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
+MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory, bool openAudioDevice)
     : devices(deviceManager, 0, 2, 0, 2, false, false, false, false),
       presetManager(std::move(presetDirectory)), sessionStore(std::move(sessionFile))
 {
@@ -51,7 +51,13 @@ MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
     revertSongButton.setTooltip("Restore the complete rack from before the last song tone. Replaces current tone edits.");
     revertSongButton.onClick = [this] { revertSongTone(); };
     rackContent.addAndMakeVisible(rigTools);
-    tunerButton.onClick = [this] { rigTools.enableTuner(); rackViewport.setViewPosition(0, 0); };
+    tunerButton.onClick = [this]
+    {
+        rigTools.setTunerEnabled(!engine.tunerEnabled.load());
+        if (engine.tunerEnabled.load()) rackViewport.setViewPosition(0, 0);
+        refreshToneSlots();
+    };
+    tunerButton.setTooltip("Toggle the tuner (T). Mute to tune is independent of Master Mute.");
     rackViewport.setViewedComponent(&rackContent, false);
     rackViewport.setScrollBarsShown(true, false);
     rackHint.setText("RACK", juce::dontSendNotification);
@@ -280,14 +286,19 @@ MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
     setupKnob(input, inputLabel, "INPUT", -24, 24, 0, " dB");
     setupKnob(drive, driveLabel, "DRIVE", 0, 48, 18, " dB");
     setupKnob(mix, mixLabel, "MIX", 0, 100, 100, " %");
-    setupKnob(output, outputLabel, "OUTPUT", -60, 0, -12, " dB");
+    setupKnob(output, outputLabel, "OUTPUT", -60, 0, 0, " dB");
     output.setTooltip("Output volume after the complete effects rack.");
     input.onValueChange = [this] { engine.parameters.inputDb.store(static_cast<float>(input.getValue())); };
     drive.onValueChange = [this] { engine.parameters.driveDb.store(static_cast<float>(drive.getValue())); };
     mix.onValueChange = [this] { engine.parameters.mix.store(static_cast<float>(mix.getValue() / 100.0)); };
     output.onValueChange = [this] { engine.parameters.outputDb.store(static_cast<float>(output.getValue())); };
     bypassButton.onClick = [this] { engine.parameters.bypass.store(bypassButton.getToggleState()); };
-    channelSelector.onChange = [this] { engine.inputChannel.store(channelSelector.getSelectedId() - 1); };
+    channelSelector.onChange = [this]
+    {
+        abortPhraseCapture();
+        const juce::ScopedLock lock(deviceManager.getAudioCallbackLock());
+        engine.requestPhraseAudition(false); engine.inputChannel.store(channelSelector.getSelectedId() - 1);
+    };
     monitoringButton.onClick = [this] { togglePlayback(); };
     monitoringButton.setTooltip("Turn audio monitoring on or off.");
     for (auto* component : std::initializer_list<juce::Component*> {
@@ -346,6 +357,8 @@ MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
         spatialTitles[i].setTooltip(spatialHints[i].getText()); spatialHints[i].setVisible(false);
     }
     refreshPresetList();
+    initialiseToneSlots();
+    initialiseDryPhrase();
     refreshPresetControls();
     refreshSignalFlow();
 
@@ -370,8 +383,11 @@ MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
     else if (restored.failed()) { presetMessage = restored.getErrorMessage() + " Using defaults."; presetHasError = true; }
     // JUCE restores device type/names, active channels, sample rate, and buffer size,
     // falling back to an available default device when the saved one is unavailable.
-    deviceError = deviceManager.initialise(resumeSetup && session.sourceId == 3 ? 2 : 0, 2, deviceState.get(), true);
-    deviceManager.addAudioCallback(&engine);
+    if (openAudioDevice)
+    {
+        deviceError = deviceManager.initialise(resumeSetup && session.sourceId == 3 ? 2 : 0, 2, deviceState.get(), true);
+        deviceManager.addAudioCallback(&engine);
+    }
     if (resumeSetup)
     {
         restoreSessionTone(session);
@@ -380,6 +396,7 @@ MainComponent::MainComponent(juce::File sessionFile, juce::File presetDirectory)
     refreshSourceStatus();
     refreshDeviceStatus();
     setSize(1120, 1120);
+    installKeyboardControls(*this);
     startTimerHz(30);
 }
 
@@ -405,6 +422,8 @@ MainComponent::~MainComponent()
     saveSession();
     fileChooser.reset();
     cabinetFileChooser.reset();
+    ++phraseRequest;
+    phraseWorker.removeAllJobs(true, -1);
     loader.removeAllJobs(true, -1);
     deviceManager.removeAudioCallback(&engine);
     deviceManager.closeAudioDevice();
@@ -413,6 +432,7 @@ MainComponent::~MainComponent()
 
 void MainComponent::changeInputSource()
 {
+    abortPhraseCapture();
     engine.monitoring.store(false);
     engine.clearEffectTails();
     sourceError.clear();
@@ -420,6 +440,7 @@ void MainComponent::changeInputSource()
         const juce::ScopedLock lock(deviceManager.getAudioCallbackLock());
         const auto mode = sourceSelector.getSelectedId();
         engine.cancelPlaybackSeek();
+        engine.requestPhraseAudition(false);
         engine.inputSource.store(mode == 1 ? AudioEngine::InputSource::file
             : mode == 2 ? AudioEngine::InputSource::testRiff : AudioEngine::InputSource::hardware);
     }
@@ -525,7 +546,7 @@ void MainComponent::refreshSourceStatus()
     channelSelector.setVisible(hardware);
     sourceInfo.setVisible(true);
     playheadLabel.setVisible(!hardware);
-    loadFileButton.setVisible(!hardware && sourceSelector.getSelectedId() == 1);
+    loadFileButton.setVisible(!hardware && sourceSelector.getSelectedId() == 1 && !engine.isPhraseAuditioning());
     contextPlayButton.setVisible(!hardware);
     restartButton.setVisible(!hardware);
     stopButton.setVisible(!hardware);
@@ -545,7 +566,8 @@ void MainComponent::refreshSourceStatus()
         }
     }
     else if (!draggingTimeline) timeline.setValue(0.0, juce::dontSendNotification);
-    loopButton.setEnabled(!hardware);
+    loopButton.setEnabled(!hardware && !engine.isPhraseAuditioning());
+    if (source != nullptr) loopButton.setToggleState(source->isLooping(), juce::dontSendNotification);
     if (loadingFile)
         sourceInfo.setText("Loading recording...", juce::dontSendNotification);
     else if (sourceError.isNotEmpty())
@@ -694,7 +716,12 @@ void MainComponent::resized()
                           &savePresetButton, &reloadPresetButton })
         button->setBounds(presetRow.removeFromRight(94).reduced(3, 3));
     presetSelector.setBounds(presetRow.reduced(0, 3));
-    presetInfo.setBounds(area.removeFromTop(24));
+    auto infoRow = area.removeFromTop(32);
+    auto slots = infoRow.removeFromRight(240).reduced(0, 2);
+    for (auto& button : slotButtons) button.setBounds(slots.removeFromLeft(42).reduced(2, 0));
+    copySlotButton.setBounds(slots.removeFromLeft(90).reduced(3, 0));
+    shortcutHelpButton.setBounds(slots.reduced(3, 0));
+    presetInfo.setBounds(infoRow);
     masterBounds = area.removeFromTop(130);
     auto master = masterBounds.reduced(14);
     masterTitle.setBounds(master.removeFromLeft(88).removeFromTop(28));
@@ -900,6 +927,7 @@ void MainComponent::resized()
                     juce::jmax(200, devices.getHeight()));
 
     auto context = contextBounds.reduced(14);
+    phrasePanel.setBounds(context.removeFromBottom(38));
     sourceInfo.setBounds(context.removeFromTop(24));
     if (engine.currentVirtualInput() != nullptr)
     {
@@ -923,6 +951,8 @@ void MainComponent::resized()
 
 void MainComponent::timerCallback()
 {
+    releaseShortcutKeys();
+    refreshDryPhrase();
     serviceToneChange();
     rigTools.refresh();
     subtitle.setText(rigTools.performanceSummary(), juce::dontSendNotification);
@@ -1045,6 +1075,7 @@ void MainComponent::refreshPresetList()
 }
 void MainComponent::refreshPresetControls()
 {
+    refreshToneSlots();
     const bool busy = loadingPreset || loadingCabinet;
     songButton.setEnabled(!busy);
     revertSongButton.setEnabled(previousSongTone.has_value() && !busy);
@@ -1236,30 +1267,5 @@ void MainComponent::seekFromTimeline()
     if (!timeline.isEnabled() || draggingTimeline) return;
     const juce::ScopedLock lock(deviceManager.getAudioCallbackLock());
     engine.seekPlayback(timeline.getValue());
-}
-bool MainComponent::keyPressed(const juce::KeyPress& key)
-{
-    if (key.getModifiers().isAnyModifierKeyDown() || isCurrentlyBlockedByAnotherModalComponent()) return false;
-    for (auto* focused = juce::Component::getCurrentlyFocusedComponent(); focused != nullptr; focused = focused->getParentComponent())
-        if (dynamic_cast<juce::TextEditor*>(focused) != nullptr) return false;
-    if (key.isKeyCode(juce::KeyPress::spaceKey))
-    {
-        if (!spaceHeld && monitoringButton.isEnabled()) togglePlayback();
-        spaceHeld = true;
-        return true;
-    }
-    if (key.isKeyCode(juce::KeyPress::homeKey) && restartButton.isEnabled())
-    {
-        if (!homeHeld) restartButton.onClick();
-        homeHeld = true;
-        return true;
-    }
-    return false;
-}
-bool MainComponent::keyStateChanged(bool)
-{
-    if (!juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey)) spaceHeld = false;
-    if (!juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::homeKey)) homeHeld = false;
-    return false;
 }
 }

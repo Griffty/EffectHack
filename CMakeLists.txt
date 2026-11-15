@@ -25,12 +25,14 @@ juce_add_gui_app(EffectHack
 
 target_sources(EffectHack PRIVATE
     main.cpp
-    AudioEngine.cpp AudioEngine.h
+    AudioEngine.cpp DryPhraseRecorder.cpp AudioEngine.h
     InputMonitor.cpp InputMonitor.h
     Tuner.cpp Tuner.h RigTools.cpp RigTools.h RigStatus.cpp RigStatus.h
     MetricMeter.cpp MetricMeter.h
     VirtualInput.cpp VirtualInput.h
     MainComponent.cpp MainComponent.h
+    MainComponentToneSlots.cpp MainComponentKeyboard.cpp MainComponentPhrase.cpp ToneSlots.cpp ToneSlots.h
+    DryPhrasePanel.cpp DryPhrasePanel.h DryPhraseRecorder.h
     MainComponentSong.cpp SongPresetPanel.cpp SongPresetPanel.h
     ApiConfig.cpp ApiConfig.h HttpClient.cpp HttpClient.h
     YouTubeMetadata.cpp YouTubeMetadata.h GeminiRecommender.cpp GeminiRecommender.h
@@ -66,7 +68,7 @@ include(CTest)
 set(EFFECTHACK_MATCHER_SOURCES
     ToneAnalysis.cpp ToneMatching.cpp ReferenceAudio.cpp YouTubeMetadata.cpp
     GeneratedRack.cpp GeneratedTonePreparation.cpp PresetManager.cpp FactoryPresets.cpp
-    AudioEngine.cpp InputMonitor.cpp VirtualInput.cpp
+    AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp VirtualInput.cpp
     effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp
     effects/Cabinet.cpp effects/Equalizer.cpp effects/RackStage.cpp
     effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
@@ -95,7 +97,7 @@ if(BUILD_TESTING)
     target_compile_definitions(EffectHackDspTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(EffectHackDspTests PRIVATE juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME distortion_dsp COMMAND EffectHackDspTests)
-    add_executable(EffectHackSourceTests tests/VirtualInputTests.cpp VirtualInput.cpp AudioEngine.cpp InputMonitor.cpp
+    add_executable(EffectHackSourceTests tests/VirtualInputTests.cpp tests/DryPhraseTests.cpp VirtualInput.cpp AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp
         effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp effects/Cabinet.cpp effects/Equalizer.cpp
         effects/RackStage.cpp effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
         effects/Chorus.cpp effects/Delay.cpp effects/Reverb.cpp)
@@ -103,32 +105,40 @@ if(BUILD_TESTING)
     target_link_libraries(EffectHackSourceTests PRIVATE juce::juce_audio_devices juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME virtual_input COMMAND EffectHackSourceTests "${CMAKE_CURRENT_BINARY_DIR}/test-audio"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sine-440hz.mp3")
-    add_executable(EffectHackToneTests tests/ToneTests.cpp tests/AmpTests.cpp tests/NoiseGateTests.cpp tests/CompressorTests.cpp AudioEngine.cpp InputMonitor.cpp VirtualInput.cpp
+    add_executable(EffectHackToneTests tests/ToneTests.cpp tests/AmpTests.cpp tests/NoiseGateTests.cpp tests/CompressorTests.cpp AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp VirtualInput.cpp
         effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp effects/Cabinet.cpp effects/Equalizer.cpp
         effects/RackStage.cpp effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
         effects/Chorus.cpp effects/Delay.cpp effects/Reverb.cpp)
     target_compile_definitions(EffectHackToneTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(EffectHackToneTests PRIVATE juce::juce_audio_devices juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME cabinet_eq COMMAND EffectHackToneTests "${CMAKE_CURRENT_BINARY_DIR}/test-audio")
-    add_executable(EffectHackSpatialTests tests/SpatialEffectsTests.cpp AudioEngine.cpp InputMonitor.cpp VirtualInput.cpp
+    add_executable(EffectHackSpatialTests tests/SpatialEffectsTests.cpp AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp VirtualInput.cpp
         effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp effects/Cabinet.cpp effects/Equalizer.cpp
         effects/RackStage.cpp effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
         effects/Chorus.cpp effects/Delay.cpp effects/Reverb.cpp)
     target_compile_definitions(EffectHackSpatialTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(EffectHackSpatialTests PRIVATE juce::juce_audio_devices juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME chorus_delay_reverb COMMAND EffectHackSpatialTests)
-    add_executable(EffectHackPresetTests tests/PresetTests.cpp tests/RackOrderTests.cpp tests/FactoryPresetTests.cpp tests/SessionStateTests.cpp tests/GeneratedToneTests.cpp GeneratedTonePreparation.cpp GeneratedRack.cpp SessionState.cpp PresetManager.cpp FactoryPresets.cpp AudioEngine.cpp InputMonitor.cpp VirtualInput.cpp
+    add_executable(EffectHackPresetTests tests/PresetTests.cpp tests/RackOrderTests.cpp tests/FactoryPresetTests.cpp tests/SessionStateTests.cpp tests/GeneratedToneTests.cpp tests/ToneSlotTests.cpp ToneSlots.cpp GeneratedTonePreparation.cpp GeneratedRack.cpp SessionState.cpp PresetManager.cpp FactoryPresets.cpp AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp VirtualInput.cpp
         effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp effects/Cabinet.cpp effects/Equalizer.cpp
         effects/RackStage.cpp effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
         effects/Chorus.cpp effects/Delay.cpp effects/Reverb.cpp)
     target_compile_definitions(EffectHackPresetTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(EffectHackPresetTests PRIVATE juce::juce_audio_devices juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME presets COMMAND EffectHackPresetTests "${CMAKE_CURRENT_BINARY_DIR}/test-presets")
-    add_executable(EffectHackMasterTests tests/MasterTests.cpp tests/InputToolsEngineTests.cpp PresetManager.cpp FactoryPresets.cpp AudioEngine.cpp InputMonitor.cpp VirtualInput.cpp
+    add_executable(EffectHackMasterTests tests/MasterTests.cpp tests/InputToolsEngineTests.cpp PresetManager.cpp FactoryPresets.cpp AudioEngine.cpp DryPhraseRecorder.cpp InputMonitor.cpp VirtualInput.cpp
         effects/NoiseGate.cpp effects/Compressor.cpp effects/Amp.cpp effects/Distortion.cpp effects/Cabinet.cpp effects/Equalizer.cpp
         effects/RackStage.cpp effects/ChannelWiseRackStage.cpp effects/StereoRackStage.cpp
         effects/Chorus.cpp effects/Delay.cpp effects/Reverb.cpp)
     target_compile_definitions(EffectHackMasterTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(EffectHackMasterTests PRIVATE juce::juce_audio_devices juce::juce_dsp juce::juce_recommended_config_flags)
     add_test(NAME master_playback COMMAND EffectHackMasterTests)
+    get_target_property(EFFECTHACK_UI_TEST_SOURCES EffectHack SOURCES)
+    list(FILTER EFFECTHACK_UI_TEST_SOURCES EXCLUDE REGEX "(^|/)main[.]cpp$")
+    add_executable(EffectHackRigControlTests tests/RigControlTests.cpp tests/PhraseControlTests.cpp ${EFFECTHACK_UI_TEST_SOURCES})
+    target_compile_definitions(EffectHackRigControlTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1 JUCE_MODAL_LOOPS_PERMITTED=1)
+    # Headless UI tests simulate the callback and never probe host ALSA devices.
+    target_compile_definitions(EffectHackRigControlTests PRIVATE $<$<PLATFORM_ID:Linux>:JUCE_ALSA=0>)
+    target_link_libraries(EffectHackRigControlTests PRIVATE juce::juce_audio_utils juce::juce_dsp CURL::libcurl juce::juce_recommended_config_flags)
+    add_test(NAME rig_keyboard_slots COMMAND EffectHackRigControlTests "${CMAKE_CURRENT_BINARY_DIR}/test-rig-controls")
 endif()

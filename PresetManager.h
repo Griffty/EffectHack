@@ -6,7 +6,7 @@ namespace effecthack
 // Tone only: sources, transport, devices, and monitoring are deliberately excluded.
 struct RackState
 {
-    std::array<float, 32> values { 0, 18, 1, -12, 0, 0, 0, .8f, .35f, .25f,
+    std::array<float, 32> values { 0, 18, 1, 0, 0, 0, 0, .8f, .35f, .25f,
                                  350, .3f, .2f, .45f, .5f, .2f, 12, 0, 0, 0, 0, -6, -50, 1, 30, 120, -18, 4, 10, 120, 0, 1 };
     std::array<bool, rackStageIds.size()> bypass { true, true, false, true, false, false, true, true, true };
     int ampVoice = static_cast<int>(AmpVoice::crunch);

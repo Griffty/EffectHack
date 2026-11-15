@@ -6,10 +6,12 @@
 #include "FactoryPresets.h"
 #include "SessionState.h"
 #include "RigTools.h"
+#include "DryPhrasePanel.h"
 #include "GeneratedTonePreparation.h"
 #include "GeminiRecommender.h"
 #include <optional>
 #include <functional>
+#include <set>
 
 namespace effecthack
 {
@@ -124,11 +126,11 @@ private:
     std::function<void(int)> onSourceChanged;
 };
 
-class MainComponent final : public juce::Component, private juce::Timer
+class MainComponent final : public juce::Component, private juce::Timer, private juce::KeyListener
 {
 public:
     explicit MainComponent(juce::File sessionFile = SessionStore::defaultFile(),
-                           juce::File presetDirectory = PresetManager::defaultDirectory());
+                           juce::File presetDirectory = PresetManager::defaultDirectory(), bool openAudioDevice = true);
     ~MainComponent() override;
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -136,6 +138,8 @@ public:
     bool keyStateChanged(bool) override;
 
 private:
+    friend struct RigControlsTestAccess;
+    friend struct PhraseControlsTestAccess;
     juce::LookAndFeel_V4 lookAndFeel;
     juce::TooltipWindow tooltips { this, 600 };
     juce::AudioDeviceManager deviceManager;
@@ -147,24 +151,54 @@ private:
     juce::Result selectSongPreset(const juce::String&);
     void applySongRecommendation(const SongRecommendation&, const Cancellation&, std::function<void(juce::Result)>);
     struct ToneUndo { Preset identity; RackState rack; };
+    enum class ToneChangeOrigin { song, revert, slot };
     struct PendingToneChange
     {
         Preset identity;
         PreparedPreset prepared;
         ToneUndo previous;
-        bool reverting = false;
+        ToneChangeOrigin origin = ToneChangeOrigin::song;
         float outputAdjustment = 0;
         Cancellation cancel;
         std::function<void(juce::Result)> completion;
         bool preserveMaster = false;
+        int slotIndex = -1;
     };
     std::optional<ToneUndo> previousSongTone;
     std::optional<PendingToneChange> pendingToneChange;
     juce::TextButton revertSongButton { "Revert" };
     bool isGeneratedPreset() const { return activePreset.id.isEmpty() && activePreset.name != "Default rack"; }
-    void startToneChange(Preset, RackState, juce::var, bool, Cancellation, std::function<void(juce::Result)>, bool preserveMaster = false);
+    void startToneChange(Preset, RackState, juce::var, ToneChangeOrigin, Cancellation, std::function<void(juce::Result)>, bool preserveMaster = false, int slotIndex = -1);
     void serviceToneChange();
     void revertSongTone();
+    ToneSlots toneSlots;
+    std::array<std::optional<PreparedPreset>, 2> slotPrepared;
+    std::array<juce::TextButton, 2> slotButtons { juce::TextButton("A"), juce::TextButton("B") };
+    juce::TextButton copySlotButton { juce::String::fromUTF8("A → B") }, shortcutHelpButton { "Keys" };
+    void initialiseToneSlots();
+    void refreshToneSlots();
+    void selectToneSlot(int);
+    void copyToneSlot();
+    void installKeyboardControls(juce::Component&);
+    void releaseShortcutKeys();
+    std::set<int> heldShortcutKeys;
+    DryPhrasePanel phrasePanel;
+    juce::ThreadPool phraseWorker { 1, 0, juce::Thread::Priority::low };
+    unsigned phraseRequest = 0, phraseGeneration = 0;
+    bool preparingPhrase = false, clearingPhrase = false, lastPhraseLayout = false;
+    double phraseCaptureRate = 48000;
+    std::array<float, 128> phrasePeaks {};
+    juce::String phraseError;
+    void initialiseDryPhrase();
+    void togglePhraseRecording();
+    void togglePhraseAudition();
+    void returnFromPhrase();
+    void clearPhrase();
+    void abortPhraseCapture();
+    void refreshDryPhrase();
+    void finishPhraseRecording();
+    bool keyPressed(const juce::KeyPress&, juce::Component*) override;
+    bool keyStateChanged(bool down, juce::Component*) override { return keyStateChanged(down); }
     juce::AudioDeviceSelectorComponent devices;
     juce::Viewport deviceViewport;
     RackContent rackContent;
@@ -204,7 +238,7 @@ private:
     juce::ToggleButton masterMuteButton { "Mute" }, rackBypassButton { "Bypass whole rack" };
     juce::TextButton clearClipsButton { "Clear clips" };
     juce::Rectangle<int> masterBounds;
-    bool draggingTimeline = false, spaceHeld = false, homeHeld = false;
+    bool draggingTimeline = false;
     void togglePlayback();
     void seekFromTimeline();
     static juce::String formatTime(double);

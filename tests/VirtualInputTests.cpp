@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numbers>
 #include <stdexcept>
+void testDryPhrase();
 
 namespace
 {
@@ -25,6 +26,7 @@ int main(int argc, char** argv)
     try
     {
         require(argc == 3 || argc == 4, "Pass a scratch directory, MP3 fixture, and optional audio file");
+        testDryPhrase();
         const auto mp3 = effecthack::loadAudioClip(juce::File(argv[2]));
         require(mp3.clip != nullptr && mp3.error.isEmpty(), "MP3 fixture must decode through the production loader");
         require(mp3.clip->sampleRate == 44100.0 && mp3.clip->duration() > 0.2

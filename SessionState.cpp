@@ -33,6 +33,7 @@ juce::var encodeSession(const SessionState& state)
         generated.id = snapshotId;
         object->setProperty("generatedPreset", encodePreset(generated));
     }
+    if (state.toneSlots.has_value()) object->setProperty("toneSlots", encodeToneSlots(*state.toneSlots));
     return juce::var(object);
 }
 juce::Result decodeSession(const juce::var& json, SessionState& destination)
@@ -43,6 +44,12 @@ juce::Result decodeSession(const juce::var& json, SessionState& destination)
         || !json["selectedPreset"].isString() || !json["audioFile"].isString()
         || !json["audioDevice"].isString()) return invalid();
     SessionState state;
+    if (json.hasProperty("toneSlots"))
+    {
+        ToneSlotState slots;
+        if (auto result = decodeToneSlots(json["toneSlots"], slots); result.failed()) return result;
+        state.toneSlots = std::move(slots);
+    }
     // Optional additions preserve startup files written before the tuner existed.
     if (json.hasProperty("tunerReference"))
     {

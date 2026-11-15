@@ -228,7 +228,7 @@ juce::var compileTonePlan(const juce::var& plan, const std::vector<ToneAnchor>& 
     const auto add = [&](const char* key, const char* delta, double low, double high)
     { set(key, juce::jlimit(low, high, static_cast<double>(base["parameters"][key]) + static_cast<double>(plan[delta]))); };
     set("inputDb", input.preserveMaster ? input.inputDb : 0);
-    set("outputDb", input.preserveMaster ? input.outputDb : -9);
+    set("outputDb", input.preserveMaster ? input.outputDb : 0);
     const bool pedal = !static_cast<bool>(base["bypass"]["distortion"]);
     if (pedal) add("driveDb", "gain_delta_db", 0, 42);
     else add("ampGainDb", "gain_delta_db", 0, 24);

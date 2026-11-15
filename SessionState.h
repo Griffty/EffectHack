@@ -1,5 +1,6 @@
 #pragma once
 #include "PresetManager.h"
+#include "ToneSlots.h"
 #include <optional>
 
 namespace effecthack
@@ -14,6 +15,7 @@ struct SessionState
     double tunerReference = 440;
     bool tunerMute = true;
     std::optional<Preset> generatedPreset;
+    std::optional<ToneSlotState> toneSlots;
 };
 juce::var encodeSession(const SessionState&);
 juce::Result decodeSession(const juce::var&, SessionState&);

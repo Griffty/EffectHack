@@ -47,7 +47,11 @@ RigTools::RigTools(AudioEngine& audio, juce::AudioDeviceManager& manager)
 }
 void RigTools::enableTuner()
 {
-    enabled.setToggleState(true, juce::dontSendNotification); enabled.onClick();
+    setTunerEnabled(true);
+}
+void RigTools::setTunerEnabled(bool value)
+{
+    enabled.setToggleState(value, juce::dontSendNotification); enabled.onClick();
 }
 juce::Colour RigTools::inputColour() const
 {

@@ -34,6 +34,7 @@ public:
     void process(juce::AudioBuffer<float>& mono, int count) noexcept;
     void reset() noexcept { convolution.reset(); }
     juce::String sourcePath() const { return impulse != nullptr ? impulse->sourcePath : juce::String(); }
+    std::shared_ptr<const CabinetImpulse> currentImpulse() const { return impulse; }
     int latencySamples() const noexcept { return convolution.getLatency(); }
 
     void processRackChannel(juce::AudioBuffer<float>& buffer, int count) noexcept { process(buffer, count); }

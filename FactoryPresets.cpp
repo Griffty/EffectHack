@@ -24,7 +24,7 @@ RackState base(AmpVoice voice, float gain)
     RackState rack;
     rack.bypass.fill(true);
     rack.ampVoice = static_cast<int>(voice);
-    rack.values[output] = -12;
+    rack.values[output] = 0;
     rack.values[ampGain] = gain;
     rack.values[ampLevel] = 0;
     for (const auto* stage : { "amp", "cabinet", "eq" }) enable(rack, stage);

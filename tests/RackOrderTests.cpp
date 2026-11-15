@@ -81,6 +81,7 @@ double distortedEqLevel(bool eqFirst)
 {
     AudioEngine engine;
     engine.inputSource = AudioEngine::InputSource::hardware;
+    engine.parameters.outputDb = -12; // Compare nonlinear stage order below the final output clamp.
     engine.cabinetParameters.bypass = true;
     engine.eqParameters.midDb = 12;
     engine.prepare(48000, 128);

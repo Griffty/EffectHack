@@ -123,7 +123,7 @@ void run(const juce::File& scratch)
     input.preserveMaster = false;
     compiled = compileTonePlan(validPlan, anchors, input);
     require(static_cast<double>(compiled["parameters"]["inputDb"]) == 0
-        && static_cast<double>(compiled["parameters"]["outputDb"]) == -9, "Optional independent default master levels");
+        && static_cast<double>(compiled["parameters"]["outputDb"]) == 0, "Optional independent default master levels");
     input.preserveMaster = true;
 
     const auto fixture = scratch.getChildFile("private-reference.wav"); writeWav(fixture);

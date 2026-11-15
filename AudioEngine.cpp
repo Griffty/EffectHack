@@ -10,6 +10,7 @@ void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
 VirtualInput* AudioEngine::currentVirtualInput()
 {
+    if (phraseAudition.load() && phraseInput.hasClip()) return &phraseInput;
     switch (inputSource.load())
     {
         case InputSource::file: return &fileInput;
@@ -21,6 +22,9 @@ VirtualInput* AudioEngine::currentVirtualInput()
 
 void AudioEngine::prepare(double sampleRate, int maximumBlockSize)
 {
+    phraseRecorder.stop();
+    const auto requestedPhrase = pendingPhraseAudition.exchange(-1);
+    if (requestedPhrase >= 0) phraseAudition.store(requestedPhrase != 0 && phraseInput.hasClip());
     blockCapacity = juce::jmax(1, maximumBlockSize);
     mono.setSize(1, blockCapacity);
     stereo.setSize(2, blockCapacity);
@@ -40,6 +44,7 @@ void AudioEngine::prepare(double sampleRate, int maximumBlockSize)
     resetSpatial.store(false);
     fileInput.prepare(sampleRate, blockCapacity);
     testInput.prepare(sampleRate, blockCapacity);
+    phraseInput.prepare(sampleRate, blockCapacity);
     effectLatency.store(rack.latencySamples(), std::memory_order_relaxed);
     masterDryDelay.prepare({ sampleRate, static_cast<juce::uint32>(blockCapacity), 1 });
     masterDryDelay.setDelay(static_cast<float>(effectLatency.load()));
@@ -61,7 +66,9 @@ void AudioEngine::prepare(double sampleRate, int maximumBlockSize)
 
 void AudioEngine::audioDeviceStopped()
 {
+    phraseRecorder.stop();
     monitorGain.setCurrentAndTargetValue(0);
+    if (pendingPhraseAudition.load() >= 0) finishPhraseSwitch();
     inputMonitor.stop();
     monitoring.store(false, std::memory_order_relaxed);
     inputPeak.store(0.0f, std::memory_order_relaxed);
@@ -72,6 +79,7 @@ void AudioEngine::audioDeviceStopped()
     pendingSeek.store(-1.0);
     fileInput.release();
     testInput.release();
+    phraseInput.release();
 }
 
 void AudioEngine::audioDeviceIOCallbackWithContext(
@@ -82,8 +90,10 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
     const juce::ScopedNoDenormals noDenormals;
     const int channel = inputChannel.load(std::memory_order_relaxed);
     const auto* input = channel >= 0 && channel < numberOfInputs ? inputs[channel] : nullptr;
+    if (pendingPhraseAudition.load() >= 0 && monitorGain.getCurrentValue() <= 0.0f) finishPhraseSwitch();
     auto* virtualInput = currentVirtualInput();
     const bool enabled = monitoring.load(std::memory_order_relaxed);
+    if (!enabled) phraseRecorder.stop();
     if (resetSpatial.exchange(false))
     {
         if (!rackChangePending) resetSignalHistory();
@@ -97,7 +107,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
         clearedWhileMuted = false;
     const bool sourceAvailable = virtualInput != nullptr ? virtualInput->hasClip() : input != nullptr;
     inputMonitor.beginBlock(sourceAvailable && (virtualInput == nullptr || (enabled && !draining)),
-        static_cast<int>(inputSource.load()) * 4 + channel, tunerEnabled.load());
+        static_cast<int>(inputSource.load()) * 4 + channel + (phraseAudition.load() ? 16 : 0), tunerEnabled.load());
     if (rackChangePending && (orderGain.getCurrentValue() <= 0.0f || monitorGain.getCurrentValue() <= 0.0f))
         commitRackOrder();
     orderGain.setTargetValue(rackChangePending || rackUpdateRequested ? 0.0f : 1.0f);
@@ -105,7 +115,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
         finishSeek(*virtualInput);
     float inPeak = 0.0f, outPeak = 0.0f, tailPeak = 0.0f, preLimitPeak = 0.0f;
     bool inputOver = false, outputOver = false;
-    monitorGain.setTargetValue(enabled && sourceAvailable && pendingSeek.load() < 0.0 ? 1.0f : 0.0f);
+    monitorGain.setTargetValue(enabled && sourceAvailable && pendingSeek.load() < 0.0 && pendingPhraseAudition.load() < 0 ? 1.0f : 0.0f);
     dryInputGain.setTargetValue(juce::Decibels::decibelsToGain(juce::jlimit(-24.0f, 24.0f, parameters.inputDb.load())));
     rackWet.setTargetValue(rackBypass.load() ? 0.0f : 1.0f);
     muteGain.setTargetValue(masterMute.load() || (tunerEnabled.load() && tunerMute.load()) ? 0.0f : 1.0f);
@@ -131,6 +141,13 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
             const auto clean = std::isfinite(value) ? value : 0.0f;
             inPeak = juce::jmax(inPeak, std::abs(clean));
             inputOver = inputOver || std::abs(clean) >= 1.0f;
+            samples[i] = clean;
+        }
+        phraseRecorder.process(samples, count, enabled && sourceAvailable && !draining
+            && !phraseAudition.load() && pendingPhraseAudition.load() < 0);
+        for (int i = 0; i < count; ++i)
+        {
+            const auto clean = samples[i];
             const auto trim = dryInputGain.getNextValue();
             inputMonitor.push(clean, clean * trim);
             samples[i] = enabled || monitorGain.isSmoothing() ? clean * trim : 0.0f;
@@ -178,6 +195,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext(
     }
     if (virtualInput != nullptr && enabled && !rackChangePending && pendingSeek.load() < 0.0 && virtualInput->isFinished())
     {
+        phraseRecorder.stop();
         if (!anySpatialEnabled() || rackBypass.load())
             monitoring.store(false, std::memory_order_relaxed);
         else if (!draining)
@@ -293,6 +311,7 @@ double AudioEngine::playbackPosition() const
 {
     const auto requested = pendingSeek.load();
     if (requested >= 0.0) return requested;
+    if (phraseAudition.load() && phraseInput.hasClip()) return phraseInput.position();
     switch (inputSource.load())
     {
         case InputSource::file: return fileInput.position();
@@ -300,6 +319,25 @@ double AudioEngine::playbackPosition() const
         case InputSource::hardware: return 0.0;
     }
     return 0.0;
+}
+
+void AudioEngine::requestPhraseAudition(bool shouldAudition)
+{
+    if (shouldAudition && !phraseInput.hasClip()) return;
+    pendingSeek.store(-1.0);
+    if (shouldAudition == phraseAudition.load()) { pendingPhraseAudition.store(-1); return; }
+    pendingPhraseAudition.store(shouldAudition ? 1 : 0);
+    if (blockCapacity == 0 || monitorGain.getCurrentValue() <= 0.0f) finishPhraseSwitch();
+}
+void AudioEngine::finishPhraseSwitch()
+{
+    const auto requested = pendingPhraseAudition.exchange(-1);
+    if (requested < 0) return;
+    const bool audition = requested != 0 && phraseInput.hasClip();
+    phraseAudition.store(audition);
+    if (audition) phraseInput.seek(0.0);
+    pendingSeek.store(-1.0);
+    inputMonitor.stop(); resetSignalHistory();
 }
 
 }

@@ -8,6 +8,7 @@ void testRackOrderAndStereo(const juce::File&);
 void testFactoryPresets(const juce::File&);
 void testSessionState(const juce::File&);
 void testGeneratedTone(const juce::File&);
+void testToneSlots(const juce::File&);
 namespace
 {
 void require(bool condition, const char* message)
@@ -136,6 +137,7 @@ int main(int argc, char** argv)
         testFactoryPresets(scratch);
         testSessionState(scratch);
         testGeneratedTone(scratch);
+        testToneSlots(scratch);
         require(scratch.deleteRecursively(), "Scratch cleanup failed");
         std::cout << "Preset persistence, CRUD, validation, IR restoration, and atomic rack load checks passed\n";
     }

@@ -183,7 +183,7 @@ positions are stored in tone presets; gain-reduction meter readings are not stor
 The effect uses `tanh` soft clipping at four times the device sample rate, with a
 latency-aligned dry path and 20 ms parameter ramps. Input gain ranges from -24 to +24 dB,
 drive from 0 to 48 dB, mix from 0 to 100%, and output from -60 to 0 dB. Output is bounded
-to digital full scale. The output defaults to -12 dB.
+to digital full scale. Master Output defaults to 0 dB.
 
 ## Generic amp
 
@@ -320,6 +320,97 @@ entire preset and leaves the current rack intact. File reading and IR decoding f
 preset loads run in the background. There is no import/export or automatic preset
 switching in this version.
 
+## Record and audition a dry phrase
+
+Use **Record** in the PHRASE strip, or **R**, and play a phrase. Press **Finish / R**
+to loop that performance through the current rack. Recording also works with an
+audio file or the built-in riff, so it can be tested without a guitar. It starts
+monitoring on the selected source when a working output/input is available.
+
+The selected mono input is captured before Master Input trim, gate, compressor,
+all effects, Mute, and Output. Its original level and dynamics are retained. A
+short five-millisecond fade at either end reduces loop-boundary clicks; there is
+no normalization or continuous auto-leveling. The callback writes into preallocated
+memory; clip finalization and waveform analysis happen on a worker.
+
+While auditioning, the phrase replaces the live feed and keeps looping. Adjust
+any effect, Input trim, or A/B slot to hear the same playing through different tones.
+**Audition / L** toggles phrase playback versus the original input. **Live** returns
+to that input while keeping the take available; **Clear** discards it. Playback,
+seek, Stop, Space, Home, Mute, and whole-rack Bypass work with the phrase. Source
+changes use a short fade and clear previous effect history. The original source
+file, position and loop preference remain available when you return.
+
+A take can be 0.25–30 seconds long; reaching 30 seconds finishes automatically.
+The strip shows recording time, a waveform, and a playback cursor. Too-short or
+silent takes leave the previous take available and expose an error in the duration
+indicator's tooltip. Recording while an older phrase is auditioning first returns
+to the original input, preventing the phrase from recording itself.
+
+Pausing stops capture without restarting playback after preparation. Device changes
+pause audio and end a partial capture at its original sample rate; retained phrases
+are resampled for the new output device. Changing the input source or channel cancels
+a pending capture. Phrases live in memory for this app session, are never uploaded,
+and are excluded from tone presets/A/B snapshots and startup files. Startup restores
+the original source with audio paused.
+
+Fresh setups, the default rack, factory presets, and new generated default levels
+use **Master Output 0 dB**. Existing user presets and startup settings keep their
+explicit saved levels. Double-click Output to reset it to 0 dB. Generated-tone
+headroom checks and the output clip indicators
+continue to operate.
+
+## A/B tone slots and keyboard controls
+
+The **A / B** buttons beside the preset status hold two editable versions of the rack.
+A starts with the current setup. The first visit to B copies the current tone; later
+visits restore B's own edits. Switching automatically retains the tone you leave,
+including unsaved controls, bypasses, amp voice, cabinet and effect order. Loading a
+preset or generating a song tone replaces the currently selected slot's working tone.
+Named preset files are changed only by the normal Save actions.
+
+Use **A → B** or **B → A** to replace the other slot with a copy of the current tone
+and its unsaved edits. Copy does not switch slots. For an easy comparison, copy A to
+B, select B, tweak it, then switch between A and B. The active button is highlighted;
+hover either button for its tone name. **Keys** opens the shortcut reference.
+
+| Key | Action |
+|---|---|
+| **1** | Select A |
+| **2** | Select B |
+| **X** | Switch A/B |
+| **Shift+X** | Copy the current tone to the other slot |
+| **B** | Toggle whole-rack bypass |
+| **M** | Toggle Master Mute |
+| **T** | Toggle tuner on/off |
+| **R** | Record / finish a dry phrase |
+| **L** | Audition phrase / return to original input |
+| **Space** | Play/pause monitoring or file playback |
+| **Home** | Restart file/test-riff playback |
+
+Shortcuts apply inside the rack window, including when a rack button has focus.
+Text editors, slider value entry, selection menus and modal dialogs retain normal
+keyboard behavior. Holding a key triggers its action once, until it is released.
+The header Tuner button also toggles on/off; Mute to tune keeps its existing behavior
+and never changes Master Mute.
+
+**Master Input and Output are shared between A and B.** Switching retains the current
+trim and listening volume, plus Mute, whole-rack Bypass, tuner, audio devices, input
+source and transport position. Amp Level and effect gains remain part of each tone,
+so the slots can still have different loudness. There is no continuous auto-leveling.
+
+Tone changes use the existing fade-down, complete-rack commit and fade-up path.
+Identical tones switch without resetting the DSP. Different tones clear old effect
+tails during the change. This uses one processor, so delay/reverb tails do not spill
+between independent parallel racks. Cabinet files are prepared in the background
+and cached after loading; failed preparation leaves the current tone and slot active.
+Slot switches do not replace the existing one-step Song Revert history.
+
+Both slots, their preset/generated baselines, their unsaved edits, and the selected
+slot are remembered on normal close. Playback starts paused after reopening. Old
+startup files without slots remain compatible. Slots remember custom cabinet paths;
+those files must still exist when first loaded after a restart.
+
 ## Matching a song's guitar tone
 
 Click **Song...**, choose a reference and guitar part, then **Match tone**. **Custom**
@@ -358,7 +449,7 @@ refine the plan. If that review fails, the first valid match remains available.
 
 **Keep master** is enabled by default: Input trim and Output listening volume remain
 yours, including changes made while matching runs. Turning it off uses Input 0 dB
-and Output −9 dB. Tone balancing runs once in the background; it is not an automatic
+and Output 0 dB. Tone balancing runs once in the background; it is not an automatic
 volume controller during playing. Turn **Custom** off to select one unchanged factory
 preset, including its stored master levels.
 
@@ -448,11 +539,15 @@ saved on normal close; forced termination does not save the latest changes.
 - `effects/RackStage.*`: reorderable stage interface and non-owning ordered rack chain.
 - `AudioEngine.*`: device callback, mono routing, master gain/mute/bypass, peak metering, and faded transport changes.
 - `VirtualInput.*`: file decoding/downmix, generated riff, memory playback, resampling.
+- `DryPhraseRecorder.*`: bounded preallocated dry capture, worker finalization, boundary fades, and waveform data.
+- `DryPhrasePanel.*`, `MainComponentPhrase.cpp`: capture/audition controls and guarded asynchronous source switching.
 - `PresetManager.*`: versioned tone snapshots, validation, local preset CRUD, and IR preparation.
 - `FactoryPresets.*`: read-only factory catalog with stable IDs and balanced starting tones.
 - `SessionState.*`: validated, atomic startup snapshots, separate from tone presets.
 - `MainComponentSession.cpp`: background tone restoration and setup capture on close.
 - `MainComponentSong.cpp`, `SongPresetPanel.*`: reference/part/section UI and atomic preset-loader integration.
+- `ToneSlots.*`: A/B edit buffers and validated startup snapshots.
+- `MainComponentToneSlots.cpp`, `MainComponentKeyboard.cpp`: slot controls, copying, prepared-cabinet reuse, and guarded keyboard actions.
 - `ApiConfig.*`: local dotenv discovery, environment overrides, and model configuration.
 - `YouTubeMetadata.*`: allowlisted video URL parsing and public metadata lookup.
 - `GeminiRecommender.*`: shared recommendation types and the legacy metadata-only API.
@@ -509,3 +604,9 @@ saved on normal close; forced termination does not save the latest changes.
 - `tests/GeneratedToneTests.cpp`: complete tone decoding, boundary values, preview attenuation/cancellation, silent commit/fade-up, cancelled transitions, disconnected device commits, and generated startup state.
 
 - `tests/ToneMatchingTests.cpp`: actual audio examples, section decoding, media request routing, bounded plans, audition refinement/failure, model fallback, cancellation, master preservation, and internal headroom checks.
+
+- `tests/ToneSlotTests.cpp`: snapshot isolation, generated baselines, complete rack persistence, copying, validation and legacy startup compatibility.
+- `tests/RigControlTests.cpp`: UI/engine integration for A/B switching, shared Master gains, keyboard repeat/typing guards, custom-cabinet failure/cache, paused startup restoration, and minimum-width layout. Tests open no audio device.
+
+- `tests/DryPhraseTests.cpp`: selected-channel pre-trim capture, muted capture, finite samples, duration cap, continuous looping, original-source preservation, pause/device/rate changes, and simulation with the test riff.
+- `tests/PhraseControlTests.cpp`: recorder UI, automatic audition, A/B continuity, pause/clear races, waveform layout, temporary-state persistence, and default/saved Output levels.
